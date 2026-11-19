@@ -17,4 +17,6 @@
     <string name="updates_channel_id" translatable="false">dragon_sound_updates</string>
     <string name="updates_channel_name">Actualizaciones</string>
     <string name="updates_channel_description">Avisos cuando haya una nueva versión de Dragon Sound.</string>
+    <string name="update_notification_title">Nueva versión de Dragon Sound</string>
+    <string name="update_notification_body">Toca para ver la descarga.</string>
 </resources>
