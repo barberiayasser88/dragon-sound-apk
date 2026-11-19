@@ -82,23 +82,27 @@ jobs:
           ./gradlew assembleRelease --no-daemon --stacktrace
           apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
           test -x "$apksigner"
+          signed_dir=app/build/outputs/apk/release/signed
+          mkdir -p "$signed_dir"
           for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-            apk="app/build/outputs/apk/release/app-${abi}-release.apk"
-            test -f "$apk"
-            signed_apk="${apk%.apk}.signed.apk"
+            apk=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name "app-${abi}-release*.apk" -print -quit)
+            test -n "$apk"
+            signed_apk="$signed_dir/app-${abi}-release.apk"
             "$apksigner" sign --ks "$ANDROID_KEYSTORE_PATH" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out "$signed_apk" "$apk"
-            mv "$signed_apk" "$apk"
-            verification_output=$("$apksigner" verify --verbose --print-certs "$apk")
+            verification_output=$("$apksigner" verify --verbose --print-certs "$signed_apk")
             printf '%s\n' "$verification_output" | grep -Fqi "Signer #1 certificate SHA-256 digest: $EXPECTED_SIGNER_SHA256"
           done
-          apk=app/build/outputs/apk/release/app-universal-release.apk
-          test -f "$apk"
-          signed_apk="${apk%.apk}.signed.apk"
+          apk=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name 'app-universal-release*.apk' -print -quit)
+          test -n "$apk"
+          signed_apk="$signed_dir/app-universal-release.apk"
           "$apksigner" sign --ks "$ANDROID_KEYSTORE_PATH" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out "$signed_apk" "$apk"
-          mv "$signed_apk" "$apk"
-          verification_output=$("$apksigner" verify --verbose --print-certs "$apk")
+          verification_output=$("$apksigner" verify --verbose --print-certs "$signed_apk")
           printf '%s\n' "$verification_output" | grep -Fqi "Signer #1 certificate SHA-256 digest: $EXPECTED_SIGNER_SHA256"
-          ls -l app/build/outputs/apk/release
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            test -f "$signed_dir/app-${abi}-release.apk"
+          done
+          test -f "$signed_dir/app-universal-release.apk"
+          ls -l "$signed_dir"
 
       - name: Remove temporary signing keystore
         if: always()
@@ -108,6 +112,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dragon-sound-signed-release-per-abi-and-universal
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/signed/*.apk
           if-no-files-found: error
           retention-days: 30
