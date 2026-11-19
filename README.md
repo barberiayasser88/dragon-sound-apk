@@ -1,208 +1,28 @@
-# Audífono Propietario 130dB - APK para Sordos
+# Dragon Sound
 
-Esta es una aplicación Android especializada para ayudar a personas con pérdida auditiva profunda.
+Aplicación Android de amplificación y escucha de audio en tiempo real. Usa el micrófono integrado del teléfono y reproduce por la salida seleccionada por Android.
 
-## Características
+> **Importante:** la app no mide dB SPL ni está certificada como dispositivo médico. El control de ganancia y el limitador digital no garantizan un nivel seguro para el oído. Empieza con el volumen bajo.
 
-✅ **Amplificación de hasta 130 dB** con limitador de seguridad médico
-✅ **Soporte Bluetooth** para auriculares inalámbricos  
-✅ **Soporte WiFi** para conectividad remota
-✅ **Filtros de Sonido** configurables:
-   - Normal
-   - Pasa-banda para voz (300-3000 Hz)
-   - Boost de graves (Bass)
-   - Boost de agudos (Treble)
+## Funciones
 
-✅ **Ecualización ajustable** en tiempo real
-✅ **Interfaz oscura** fácil de usar
-✅ **Compilación para ARM y x86**
-✅ **Audio en servicio de primer plano** para continuar con la pantalla apagada
-✅ **Mosaico de Ajustes rápidos** y notificación persistente para controlar la escucha
+- Servicio de audio en primer plano y mosaico de Ajustes rápidos existentes.
+- Filtro Voz con pasa-banda aproximado para priorizar habla (250–3400 Hz).
+- Reducción de ruido mediante NoiseSuppressor de Android, activada al iniciar; la app indica si el dispositivo no la admite.
+- Solicitud de reproducción LOW_LATENCY y búfer reducido al mínimo compatible. Android y especialmente Bluetooth A2DP pueden añadir retardo; no se garantiza latencia cero.
+- Controles existentes de ganancia y ecualización. La escala 0–15x es ganancia digital, no dB SPL.
+- APK universal con armeabi-v7a, arm64-v8a, x86 y x86_64.
 
-## Requisitos
+## Seguridad
 
-- Android 7.0+ (API 24)
-- Android Studio 2022.1+
-- Android NDK (para compilar C++)
-- Gradle 8.0+
+La compresión limita picos digitales, pero no mide ni limita la presión sonora real de cada combinación de teléfono y auriculares. Mantén el volumen bajo al iniciar y sube solo lo necesario. Si oyes silbido, distorsión o molestia, baja el volumen y detén la escucha.
 
-El APK de depuración incluye las bibliotecas `armeabi-v7a`, `arm64-v8a`, `x86` y `x86_64` en un solo archivo. La aplicación selecciona el micrófono integrado del teléfono para la entrada de audio. La disponibilidad del mosaico y los controles en pantalla bloqueada depende de las funciones y ajustes de cada dispositivo.
+## Compilar
 
-## Estructura del Proyecto
+Requisitos: Android SDK, NDK 25.1.8937393, CMake 3.22.1 y Java 17.
 
-```
-dragon-sound/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/audifono/propietario/
-│   │   │   ├── MainActivity.java          # Interfaz principal
-│   │   │   ├── AudioService.java          # Motor de audio
-│   │   │   ├── BluetoothManager.java      # Gestión Bluetooth
-│   │   │   ├── WiFiManager.java           # Gestión WiFi
-│   │   ├── cpp/
-│   │   │   ├── audio_processor.cpp        # Procesamiento de audio nativo
-│   │   │   ├── CMakeLists.txt             # Configuración CMake
-│   │   ├── res/
-│   │   │   ├── layout/activity_main.xml   # Interfaz gráfica
-│   │   │   ├── drawable/                  # Recursos gráficos
-│   │   │   ├── values/                    # Strings y estilos
-│   │   ├── AndroidManifest.xml            # Configuración de la app
-│   ├── build.gradle                       # Configuración de compilación
-├── build.gradle                           # Configuración raíz
-├── settings.gradle                        # Configuración de Gradle
-├── gradle.properties                      # Propiedades globales
-└── README.md                              # Este archivo
+En Windows: gradlew.bat assembleDebug
 
-## Instalación y Compilación
+En macOS/Linux: ./gradlew assembleDebug
 
-### 1. Clonar/Descargar el proyecto
-
-```bash
-cd /home/elmer/Escritorio/dragon-sound
-```
-
-### 2. Configurar Android SDK
-
-Asegúrate de que en ~/.gradle/gradle.properties está configurado:
-
-```bash
-sdk.dir=/path/to/your/Android/SDK
-```
-
-O en Android Studio: File → Project Structure → SDK Location
-
-### 3. Compilar Debug APK
-
-```bash
-./gradlew assembleDebug
-```
-
-El APK se generará en: `app/build/outputs/apk/debug/app-debug.apk`
-
-### 4. Compilar Release APK (Optimizado)
-
-```bash
-./gradlew assembleRelease
-```
-
-El APK se generará en: `app/build/outputs/apk/release/app-release.apk`
-
-### 5. Instalar en dispositivo
-
-```bash
-# Con USB Debug activado
-adb install app/build/outputs/apk/debug/app-debug.apk
-
-# O si necesitas reinstalar
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Permisos Requeridos
-
-- `RECORD_AUDIO` - Captar audio del micrófono
-- `MODIFY_AUDIO_SETTINGS` - Controlar ganancia y volumen
-- `BLUETOOTH` - Conectar dispositivos Bluetooth
-- `BLUETOOTH_ADMIN` - Administrar conexión Bluetooth
-- `BLUETOOTH_CONNECT` - Android 12+ - Conectar a periféricos
-- `BLUETOOTH_SCAN` - Android 12+ - Escanear dispositivos
-- `ACCESS_WIFI_STATE` - Ver estado de WiFi
-- `CHANGE_WIFI_STATE` - Cambiar red WiFi
-- `INTERNET` - Conectividad web
-- `ACCESS_NETWORK_STATE` - Estado de red
-- `ACCESS_FINE_LOCATION` - Ubicación para Bluetooth (Android 12+)
-
-## Características Técnicas
-
-### Audio Processing
-
-- **Frecuencia de muestreo**: 44.1 kHz
-- **Formato**: PCM 16-bit Mono
-- **Latencia baja**: Buffer mínimo para evitar eco
-- **JNI Nativo**: Procesamiento C++ para máximo rendimiento
-
-### Amplificación
-
-- Rango: 0 - 15x (0 - 130 dB SPL)
-- Limitador de seguridad: -0.70 dB
-- Ratio de compresión: 10:1 (previene clipping)
-
-### Filtros de Audio
-
-1. **Normal**: Sin filtro, amplificación plana
-2. **Voz**: Pasa-banda 300-3000 Hz (reduce ruido)
-3. **Bass**: Amplifica frecuencias bajas
-4. **Treble**: Amplifica frecuencias altas
-
-## Soporte Bluetooth
-
-- Conexión RFCOMM estándar
-- UUID: `00001101-0000-1000-8000-00805F9B34FB`
-- Compatible con auriculares estándar
-- Emparejamiento automático
-
-## Soporte WiFi
-
-- Escaneo de redes disponibles
-- Conexión a redes WPA2/WPA3
-- API nativa Android 10+ (WifiNetworkSpecifier)
-
-## Limitaciones de Seguridad Médica
-
-⚠️ **IMPORTANTE**: Esta aplicación incluye limitadores de seguridad obligatorios:
-
-- **Umbral máximo de presión sonora**: 130 dB SPL
-- **Compresión automática**: Se activa cuando se detectan picos
-- **Clipping prevention**: Suavizado de ondas distorsionadas
-
-Esto es para PROTEGER LA SALUD AUDITIVA del usuario.
-
-## Compilación con Android Studio
-
-1. Abre Android Studio
-2. File → Open Project → Selecciona `/home/elmer/Escritorio/dragon-sound`
-3. Wait for Gradle sync
-4. Run → Run 'app' (o presiona Shift+F10)
-
-## Troubleshooting
-
-### Error: "Android NDK not found"
-
-```bash
-# Instalar NDK
-./gradlew build
-# Si persiste, instálalo manualmente desde Android Studio:
-# Tools → SDK Manager → SDK Tools → NDK
-```
-
-### Error: "Gradle build failed"
-
-```bash
-# Limpiar caché
-./gradlew clean
-
-# Volver a compilar
-./gradlew assembleDebug
-```
-
-### APK no instala
-
-```bash
-# Verificar que el dispositivo está en modo debug
-adb devices
-
-# Forzar instalación
-adb install -r -g app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Licencia
-
-Propietario - Uso médico autorizado solamente
-
-## Autor
-
-Proyecto especializado para audífonos con ganancia profunda (130 dB)
-
----
-
-**Última actualización**: 2026
-**Versión**: 1.0.0
+El APK queda en app/build/outputs/apk/debug/app-debug.apk. El workflow de GitHub Actions también compila el APK universal.

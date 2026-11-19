@@ -49,7 +49,10 @@ public class MainActivity extends AppCompatActivity {
 
     private final SharedPreferences.OnSharedPreferenceChangeListener audioStateListener =
             (preferences, key) -> {
-                if (AudioService.PREF_ACTIVE.equals(key) || AudioService.PREF_LAST_ERROR.equals(key)) {
+                if (AudioService.PREF_ACTIVE.equals(key)
+                        || AudioService.PREF_LAST_ERROR.equals(key)
+                        || AudioService.PREF_NOISE_REDUCTION.equals(key)
+                        || AudioService.PREF_NOISE_REDUCTION_ACTIVE.equals(key)) {
                     updateStatus();
                 }
             };
@@ -59,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private SeekBar bassSeekBar;
     private Button startButton;
     private Button stopButton;
+    private Button noiseReductionButton;
     private Button bluetoothButton;
     private Button wifiButton;
     private TextView gainTextView;
@@ -109,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
         bassSeekBar = findViewById(R.id.bassSeekBar);
         startButton = findViewById(R.id.startButton);
         stopButton = findViewById(R.id.stopButton);
+        noiseReductionButton = findViewById(R.id.noiseReductionButton);
         bluetoothButton = findViewById(R.id.bluetoothButton);
         wifiButton = findViewById(R.id.wifiButton);
         gainTextView = findViewById(R.id.gainTextView);
@@ -132,6 +137,8 @@ public class MainActivity extends AppCompatActivity {
         bassSeekBar.setProgress(Math.round(savedBass * 100.0f + 50.0f));
         filterSpinner.setSelection(AudioService.getSavedFilter(this));
         updateGainText(savedGain);
+
+        updateNoiseReductionButton();
 
         gainSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -191,6 +198,7 @@ public class MainActivity extends AppCompatActivity {
 
         startButton.setOnClickListener(v -> requestAudioStart(false));
         stopButton.setOnClickListener(v -> stopAudio());
+        noiseReductionButton.setOnClickListener(v -> toggleNoiseReduction());
         bluetoothButton.setOnClickListener(v -> requestBluetoothPermissionsOrShowDevices());
         wifiButton.setOnClickListener(v -> wifiManager.mostrarRedes());
 
@@ -214,6 +222,34 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
+    }
+
+    private void toggleNoiseReduction() {
+        boolean enabled = !AudioService.isNoiseReductionEnabled(this);
+        Intent intent = new Intent(this, AudioService.class);
+        intent.setAction(AudioService.ACTION_SET_NOISE_REDUCTION);
+        intent.putExtra("enabled", enabled);
+        startService(intent);
+        updateNoiseReductionButton();
+    }
+
+    private void updateNoiseReductionButton() {
+        boolean enabled = AudioService.isNoiseReductionEnabled(this);
+        boolean audioActive = AudioService.isAudioActive(this);
+        boolean reductionActive = AudioService.isNoiseReductionActive(this);
+
+        String label;
+        if (!enabled) {
+            label = "Reducción de ruido: DESACTIVADA";
+        } else if (!audioActive) {
+            label = "Reducción de ruido: ACTIVADA al iniciar";
+        } else if (reductionActive) {
+            label = "Reducción de ruido: ACTIVA";
+        } else {
+            label = "Reducción de ruido: NO DISPONIBLE";
+        }
+        noiseReductionButton.setText(label);
+        noiseReductionButton.setContentDescription(label + ". Toca para cambiar.");
     }
 
     private void updateGainText(float gain) {
@@ -337,6 +373,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateStatus() {
+        updateNoiseReductionButton();
         String error = AudioService.consumeLastError(this);
         if (error != null && !error.isEmpty()) {
             statusTextView.setText("Estado: audio detenido");
