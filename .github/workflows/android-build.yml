@@ -32,8 +32,10 @@ jobs:
         run: |
           sdkmanager "platforms;android-34" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
 
-      - name: Set executable permissions
-        run: chmod +x ./gradlew
+      - name: Normalize wrapper line endings and set permissions
+        run: |
+          sed -i 's/\r$//' ./gradlew
+          chmod +x ./gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
