@@ -20,7 +20,9 @@ El control **Reducción de ruido** activa el efecto NoiseSuppressor proporcionad
 
 ## Retardo y auriculares
 
-La app solicita una ruta de reproducción de baja latencia y usa el búfer mínimo compatible con el dispositivo. Aun así, Android, el hardware y en particular Bluetooth A2DP pueden añadir retardo. No se puede garantizar retardo cero. Si el sonido retardado de tu propia voz te confunde, detén la escucha mientras hablas o prueba una salida cableada; la percepción final debe comprobarse en el teléfono y los auriculares concretos.
+La app solicita una ruta de reproducción de baja latencia y usa el búfer mínimo compatible con el dispositivo. En auriculares Bluetooth, desde Android 12 intenta seleccionar la ruta de comunicación tipo llamada si Android la ofrece. La pantalla indica "modo llamada" cuando se activa y "modo normal" cuando solo está disponible la ruta Bluetooth estándar. El modo llamada suele ser mono y puede bajar la calidad de audio, pero puede reducir el retardo frente a A2DP. El retardo depende del teléfono y los auriculares, y no se garantiza retardo cero.
+
+Si el sonido retardado de tu propia voz te confunde, detén la escucha mientras hablas o prueba una salida cableada; la percepción final debe comprobarse en el teléfono y los auriculares concretos.
 
 ## Filtros y ecualización
 
