@@ -54,11 +54,6 @@ public class AudioService extends Service {
     public static final String PREF_NOISE_REDUCTION = "noise_reduction";
     public static final String PREF_NOISE_REDUCTION_ACTIVE = "noise_reduction_active";
     public static final String PREF_LAST_ERROR = "last_error";
-    public static final String PREF_BLUETOOTH_ROUTE = "bluetooth_route";
-    public static final String BLUETOOTH_ROUTE_NONE = "none";
-    public static final String BLUETOOTH_ROUTE_LOW_LATENCY = "low_latency";
-    public static final String BLUETOOTH_ROUTE_STANDARD = "standard";
-    
 
     private static final int SAMPLE_RATE = 44100;
     private static final float VOICE_HIGHPASS_ALPHA = (float) (SAMPLE_RATE / (SAMPLE_RATE + 2.0 * Math.PI * 250.0));
@@ -83,13 +78,6 @@ public class AudioService extends Service {
     private volatile AudioTrack player;
     private volatile Thread audioThread;
     private PowerManager.WakeLock wakeLock;
-    private AudioManager communicationAudioManager;
-    private AudioDeviceInfo previousCommunicationDevice;
-    private int previousAudioMode = AudioManager.MODE_NORMAL;
-    private boolean communicationRouteConfigured;
-    private volatile boolean bluetoothCommunicationRouteActive;
-    
-    
 
     public static boolean isAudioActive(Context context) {
         return context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -354,22 +342,21 @@ public class AudioService extends Service {
             if (minimumTrackBufferSize <= 0) {
                 throw new IllegalStateException("El dispositivo no admite la reproducción de audio solicitada.");
             }
-            int requestedBufferSize = SAMPLE_RATE / 100 * 2;
+            int requestedBufferSize = SAMPLE_RATE / 50 * 2;
             int bufferSize = Math.max(
                     Math.max(minimumBufferSize, minimumTrackBufferSize),
                     requestedBufferSize
             );
 
             localRecorder = new AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    MediaRecorder.AudioSource.MIC,
                     SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     bufferSize
             );
 
-            boolean bluetoothVoiceRoute = configureBluetoothVoiceRoute();
-            localPlayer = createAudioTrack(bufferSize, bluetoothVoiceRoute);
+            localPlayer = createAudioTrack(bufferSize);
             selectBuiltInMicrophone(localRecorder);
 
             if (!isRunning) {
@@ -378,16 +365,14 @@ public class AudioService extends Service {
 
             recorder = localRecorder;
             player = localPlayer;
-            
-            applyNoiseReduction(localRecorder);
             localRecorder.startRecording();
-            
+            applyNoiseReduction(localRecorder);
             verifyBuiltInMicrophoneRoute(localRecorder);
             localPlayer.play();
             updateActiveState(true);
             updateForegroundNotification();
 
-            int sampleCapacity = SAMPLE_RATE / 100;
+            int sampleCapacity = bufferSize / 2;
             short[] buffer = new short[sampleCapacity];
             float[] floatBuffer = new float[sampleCapacity];
 
@@ -441,8 +426,6 @@ public class AudioService extends Service {
                 player = null;
             }
             releaseNoiseSuppressor();
-            restoreCommunicationRoute();
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_NONE);
             releaseAudioResources(localRecorder, localPlayer);
             releaseWakeLock();
             updateActiveState(false);
@@ -485,13 +468,13 @@ public class AudioService extends Service {
         }
     }
 
-    private AudioTrack createAudioTrack(int bufferSize, boolean bluetoothVoiceRoute) {
+    private AudioTrack createAudioTrack(int bufferSize) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             AudioTrack lowLatencyPlayer = null;
             try {
                 lowLatencyPlayer = new AudioTrack.Builder()
                         .setAudioAttributes(new AudioAttributes.Builder()
-                                .setUsage(bluetoothVoiceRoute ? AudioAttributes.USAGE_VOICE_COMMUNICATION : AudioAttributes.USAGE_MEDIA)
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
                                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                                 .build())
                         .setAudioFormat(new AudioFormat.Builder()
@@ -517,7 +500,7 @@ public class AudioService extends Service {
         }
 
         return new AudioTrack(
-                bluetoothVoiceRoute ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC,
+                AudioManager.STREAM_MUSIC,
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
@@ -757,124 +740,6 @@ public class AudioService extends Service {
         }
         releaseWakeLock();
         stopSelf();
-    }
-
-
-    private void updateBluetoothRouteStatus(String status) {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(PREF_BLUETOOTH_ROUTE, status)
-                .apply();
-    }
-
-    public static String getBluetoothRouteStatus(Context context) {
-        return context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getString(PREF_BLUETOOTH_ROUTE, BLUETOOTH_ROUTE_NONE);
-    }
-
-    private boolean configureBluetoothVoiceRoute() {
-        AudioManager manager = getSystemService(AudioManager.class);
-        if (manager == null) {
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_STANDARD);
-            return false;
-        }
-
-        boolean bluetoothOutputConnected = false;
-        try {
-            for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-                int type = device.getType();
-                if (type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
-                        || type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                        || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                        && type == AudioDeviceInfo.TYPE_BLE_HEADSET)) {
-                    bluetoothOutputConnected = true;
-                    break;
-                }
-            }
-        } catch (SecurityException e) {
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_STANDARD);
-            Log.w(TAG, "No se pudo detectar la salida Bluetooth.", e);
-            return false;
-        }
-
-        if (!bluetoothOutputConnected) {
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_NONE);
-            return false;
-        }
-
-        updateBluetoothRouteStatus(BLUETOOTH_ROUTE_STANDARD);
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            Log.w(TAG, "La ruta Bluetooth de baja latencia requiere Android 12 o posterior.");
-            return false;
-        }
-        if (manager.getMode() == AudioManager.MODE_IN_CALL) {
-            Log.w(TAG, "No se cambio la ruta Bluetooth durante una llamada del sistema.");
-            return false;
-        }
-
-        AudioDeviceInfo bluetoothDevice = null;
-        try {
-            for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
-                int type = device.getType();
-                if (type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                        || type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
-                    bluetoothDevice = device;
-                    break;
-                }
-            }
-        } catch (SecurityException | IllegalStateException e) {
-            Log.w(TAG, "No se pudieron consultar las rutas Bluetooth de comunicacion.", e);
-            return false;
-        }
-
-        if (bluetoothDevice == null) {
-            Log.w(TAG, "No hay una ruta Bluetooth de llamada disponible; se usa la ruta normal.");
-            return false;
-        }
-
-        previousAudioMode = manager.getMode();
-        previousCommunicationDevice = manager.getCommunicationDevice();
-        communicationAudioManager = manager;
-        communicationRouteConfigured = true;
-        try {
-            manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
-            if (!manager.setCommunicationDevice(bluetoothDevice)) {
-                restoreCommunicationRoute();
-                updateBluetoothRouteStatus(BLUETOOTH_ROUTE_STANDARD);
-                Log.w(TAG, "Android rechazo la ruta Bluetooth de comunicacion.");
-                return false;
-            }
-            bluetoothCommunicationRouteActive = true;
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_LOW_LATENCY);
-            return true;
-        } catch (SecurityException | IllegalStateException e) {
-            restoreCommunicationRoute();
-            updateBluetoothRouteStatus(BLUETOOTH_ROUTE_STANDARD);
-            Log.w(TAG, "No se pudo activar la ruta Bluetooth de baja latencia.", e);
-            return false;
-        }
-    }
-
-    private void restoreCommunicationRoute() {
-        AudioManager manager = communicationAudioManager;
-        if (!communicationRouteConfigured || manager == null) {
-            return;
-        }
-
-        try {
-            manager.clearCommunicationDevice();
-            if (previousCommunicationDevice != null
-                    && !manager.setCommunicationDevice(previousCommunicationDevice)) {
-                Log.w(TAG, "No se pudo restaurar la ruta de audio anterior.");
-            }
-            manager.setMode(previousAudioMode);
-        } catch (SecurityException | IllegalStateException e) {
-            Log.w(TAG, "No se pudo restaurar el modo de audio anterior.", e);
-        } finally {
-            communicationRouteConfigured = false;
-            communicationAudioManager = null;
-            previousCommunicationDevice = null;
-            bluetoothCommunicationRouteActive = false;
-        }
     }
 
     @Override
