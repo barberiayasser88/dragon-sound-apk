@@ -1,0 +1,42 @@
+name: Notify Dragon Sound updates
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate with Firebase service account
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}'
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+
+      - name: Send release notification to FCM topic
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          set -euo pipefail
+          : "${ACCESS_TOKEN:?Missing authentication token}"
+          : "${RELEASE_URL:?Missing published release URL}"
+          payload="$(jq -n \
+            --arg title "Nueva versión de Dragon Sound: ${RELEASE_TAG}" \
+            --arg body "Toca para ver la descarga oficial." \
+            --arg release_url "$RELEASE_URL" \
+            '{message: {topic: "dragon-sound-updates", notification: {title: $title, body: $body}, data: {release_url: $release_url}, android: {notification: {click_action: "com.audifono.propietario.OPEN_RELEASE"}}}}')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${ACCESS_TOKEN}" \
+            --header "Content-Type: application/json; charset=utf-8" \
+            --data "$payload" \
+            "https://fcm.googleapis.com/v1/projects/dragon-sound/messages:send"
