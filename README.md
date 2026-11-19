@@ -9,7 +9,7 @@ Aplicación Android de amplificación y escucha de audio en tiempo real. Usa el 
 - Servicio de audio en primer plano y mosaico de Ajustes rápidos existentes.
 - Filtro Voz con pasa-banda aproximado para priorizar habla (250–3400 Hz).
 - Reducción de ruido mediante NoiseSuppressor de Android, activada al iniciar; la app indica si el dispositivo no la admite.
-- Solicitud de reproducción LOW_LATENCY y búfer reducido al mínimo compatible. Android y especialmente Bluetooth A2DP pueden añadir retardo; no se garantiza latencia cero.
+- Solicitud de reproducción LOW_LATENCY y búfer reducido al mínimo compatible. En Bluetooth, Android 12+ intenta usar la ruta de comunicación tipo llamada si está disponible; puede reducir el retardo, pero suele bajar la calidad de audio. Si no está disponible, se usa la ruta estándar. Android puede añadir retardo y no se garantiza latencia cero.
 - Controles existentes de ganancia y ecualización. La escala 0–15x es ganancia digital, no dB SPL.
 - APK universal con armeabi-v7a, arm64-v8a, x86 y x86_64.
 
