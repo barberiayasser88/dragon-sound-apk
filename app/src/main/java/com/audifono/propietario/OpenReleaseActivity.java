@@ -16,6 +16,9 @@ public final class OpenReleaseActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         String releaseUrl = getIntent().getStringExtra(ReleaseMessagingService.EXTRA_RELEASE_URL);
+        if (releaseUrl == null) {
+            releaseUrl = getIntent().getStringExtra("release_url");
+        }
         if (ReleaseMessagingService.isValidReleaseUrl(releaseUrl)) {
             try {
                 startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)));
