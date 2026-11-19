@@ -1,5 +1,8 @@
 package com.audifono.propietario;
 
+import android.media.AudioAttributes;
+import android.media.AudioEffect;
+import android.media.audiofx.NoiseSuppressor;
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -35,6 +38,7 @@ public class AudioService extends Service {
     public static final String ACTION_MODE_TREBLE = "com.audifono.propietario.ACTION_MODE_TREBLE";
     public static final String ACTION_SET_GAIN = "com.audifono.propietario.ACTION_SET_GAIN";
     public static final String ACTION_SET_TREBLE = "com.audifono.propietario.ACTION_SET_TREBLE";
+    public static final String ACTION_SET_NOISE_REDUCTION = "com.audifono.propietario.ACTION_SET_NOISE_REDUCTION";
     public static final String ACTION_SET_BASS = "com.audifono.propietario.ACTION_SET_BASS";
 
     private static final String TAG = "DragonSoundAudio";
@@ -47,12 +51,22 @@ public class AudioService extends Service {
     private static final String PREF_TREBLE = "treble";
     private static final String PREF_BASS = "bass";
     private static final String PREF_FILTER = "filter";
+    public static final String PREF_NOISE_REDUCTION = "noise_reduction";
+    public static final String PREF_NOISE_REDUCTION_ACTIVE = "noise_reduction_active";
     public static final String PREF_LAST_ERROR = "last_error";
 
     private static final int SAMPLE_RATE = 44100;
+    private static final float VOICE_HIGHPASS_ALPHA = (float) (SAMPLE_RATE / (SAMPLE_RATE + 2.0 * Math.PI * 250.0));
+    private static final float VOICE_LOWPASS_ALPHA = (float) ((2.0 * Math.PI * 3400.0) / (SAMPLE_RATE + 2.0 * Math.PI * 3400.0));
     private static final float SAFETY_THRESHOLD = 0.50f;
     private static final float COMPRESSION_RATIO = 12.0f;
 
+    private final Object noiseSuppressorLock = new Object();
+    private NoiseSuppressor noiseSuppressor;
+    private volatile boolean noiseReductionEnabled = true;
+    private float previousVoiceInput;
+    private float previousVoiceHighPass;
+    private float previousVoiceLowPass;
     private volatile boolean isRunning;
     private volatile boolean stopRequested;
     private volatile float factorGanancia = 10.0f;
@@ -87,7 +101,17 @@ public class AudioService extends Service {
 
     public static int getSavedFilter(Context context) {
         return context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getInt(PREF_FILTER, 0);
+                .getInt(PREF_FILTER, 1);
+    }
+
+    public static boolean isNoiseReductionEnabled(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(PREF_NOISE_REDUCTION, true);
+    }
+
+    public static boolean isNoiseReductionActive(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(PREF_NOISE_REDUCTION_ACTIVE, false);
     }
 
     public static String consumeLastError(Context context) {
@@ -109,7 +133,9 @@ public class AudioService extends Service {
         factorGanancia = getSavedGain(this);
         trebleGain = getSavedTreble(this);
         bassGain = getSavedBass(this);
+        noiseReductionEnabled = isNoiseReductionEnabled(this);
         filtroActual = getSavedFilter(this);
+        updateNoiseReductionActiveState(false);
         updateActiveState(false);
     }
 
@@ -155,6 +181,8 @@ public class AudioService extends Service {
             setGanancia(intent.getFloatExtra("gain", factorGanancia));
         } else if (ACTION_SET_TREBLE.equals(action)) {
             setTreble(intent.getFloatExtra("treble", trebleGain));
+        } else if (ACTION_SET_NOISE_REDUCTION.equals(action)) {
+            setNoiseReduction(intent.getBooleanExtra("enabled", !noiseReductionEnabled));
         } else if (ACTION_SET_BASS.equals(action)) {
             setBass(intent.getFloatExtra("bass", bassGain));
         } else {
@@ -306,7 +334,19 @@ public class AudioService extends Service {
             if (minimumBufferSize <= 0) {
                 throw new IllegalStateException("El dispositivo no admite la captura de audio solicitada.");
             }
-            int bufferSize = Math.max(minimumBufferSize, SAMPLE_RATE / 10 * 2);
+            int minimumTrackBufferSize = AudioTrack.getMinBufferSize(
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+            );
+            if (minimumTrackBufferSize <= 0) {
+                throw new IllegalStateException("El dispositivo no admite la reproducción de audio solicitada.");
+            }
+            int requestedBufferSize = SAMPLE_RATE / 50 * 2;
+            int bufferSize = Math.max(
+                    Math.max(minimumBufferSize, minimumTrackBufferSize),
+                    requestedBufferSize
+            );
 
             localRecorder = new AudioRecord(
                     MediaRecorder.AudioSource.MIC,
@@ -315,19 +355,8 @@ public class AudioService extends Service {
                     AudioFormat.ENCODING_PCM_16BIT,
                     bufferSize
             );
-            localPlayer = new AudioTrack(
-                    AudioManager.STREAM_MUSIC,
-                    SAMPLE_RATE,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize,
-                    AudioTrack.MODE_STREAM
-            );
 
-            if (localRecorder.getState() != AudioRecord.STATE_INITIALIZED
-                    || localPlayer.getState() != AudioTrack.STATE_INITIALIZED) {
-                throw new IllegalStateException("No se pudo inicializar la entrada o salida de audio.");
-            }
+            localPlayer = createAudioTrack(bufferSize);
             selectBuiltInMicrophone(localRecorder);
 
             if (!isRunning) {
@@ -337,6 +366,7 @@ public class AudioService extends Service {
             recorder = localRecorder;
             player = localPlayer;
             localRecorder.startRecording();
+            applyNoiseReduction(localRecorder);
             verifyBuiltInMicrophoneRoute(localRecorder);
             localPlayer.play();
             updateActiveState(true);
@@ -395,6 +425,7 @@ public class AudioService extends Service {
             if (player == localPlayer) {
                 player = null;
             }
+            releaseNoiseSuppressor();
             releaseAudioResources(localRecorder, localPlayer);
             releaseWakeLock();
             updateActiveState(false);
@@ -435,6 +466,47 @@ public class AudioService extends Service {
                     "Android no pudo enrutar la entrada al micrófono integrado del teléfono."
             );
         }
+    }
+
+    private AudioTrack createAudioTrack(int bufferSize) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioTrack lowLatencyPlayer = null;
+            try {
+                lowLatencyPlayer = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setSampleRate(SAMPLE_RATE)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .build())
+                        .setBufferSizeInBytes(bufferSize)
+                        .setTransferMode(AudioTrack.MODE_STREAM)
+                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                        .build();
+                if (lowLatencyPlayer.getState() == AudioTrack.STATE_INITIALIZED) {
+                    return lowLatencyPlayer;
+                }
+                lowLatencyPlayer.release();
+                Log.w(TAG, "AudioTrack de baja latencia no se inicializó; se usará la ruta estándar.");
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                if (lowLatencyPlayer != null) {
+                    lowLatencyPlayer.release();
+                }
+                Log.w(TAG, "AudioTrack de baja latencia no está disponible; se usará la ruta estándar.", e);
+            }
+        }
+
+        return new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize,
+                AudioTrack.MODE_STREAM
+        );
     }
 
     private void releaseAudioResources(AudioRecord localRecorder, AudioTrack localPlayer) {
@@ -486,8 +558,14 @@ public class AudioService extends Service {
     }
 
     private void filtroVoz(float[] buffer, int samples) {
-        for (int i = 2; i < samples; i++) {
-            buffer[i] = 0.5f * buffer[i] + 0.25f * buffer[i - 1] + 0.25f * buffer[i - 2];
+        for (int i = 0; i < samples; i++) {
+            float input = buffer[i];
+            float highPass = VOICE_HIGHPASS_ALPHA
+                    * (previousVoiceHighPass + input - previousVoiceInput);
+            previousVoiceInput = input;
+            previousVoiceHighPass = highPass;
+            previousVoiceLowPass += VOICE_LOWPASS_ALPHA * (highPass - previousVoiceLowPass);
+            buffer[i] = previousVoiceLowPass;
         }
     }
 
@@ -539,6 +617,75 @@ public class AudioService extends Service {
         }
         releaseWakeLock();
         updateActiveState(false);
+    }
+
+    private void setNoiseReduction(boolean enabled) {
+        noiseReductionEnabled = enabled;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean(PREF_NOISE_REDUCTION, enabled)
+                .apply();
+
+        AudioRecord activeRecorder = recorder;
+        if (activeRecorder != null) {
+            applyNoiseReduction(activeRecorder);
+        } else {
+            updateNoiseReductionActiveState(false);
+        }
+    }
+
+    private void applyNoiseReduction(AudioRecord audioRecorder) {
+        synchronized (noiseSuppressorLock) {
+            if (noiseSuppressor != null) {
+                noiseSuppressor.release();
+                noiseSuppressor = null;
+            }
+            if (!noiseReductionEnabled) {
+                updateNoiseReductionActiveState(false);
+                return;
+            }
+            if (!NoiseSuppressor.isAvailable()) {
+                Log.w(TAG, "NoiseSuppressor no está disponible en este dispositivo.");
+                updateNoiseReductionActiveState(false);
+                return;
+            }
+
+            NoiseSuppressor effect = null;
+            try {
+                effect = NoiseSuppressor.create(audioRecorder.getAudioSessionId());
+                if (effect == null || effect.setEnabled(true) != AudioEffect.SUCCESS) {
+                    if (effect != null) {
+                        effect.release();
+                    }
+                    Log.w(TAG, "Android no pudo activar NoiseSuppressor.");
+                    updateNoiseReductionActiveState(false);
+                    return;
+                }
+                noiseSuppressor = effect;
+                updateNoiseReductionActiveState(true);
+            } catch (RuntimeException e) {
+                if (effect != null) {
+                    effect.release();
+                }
+                Log.e(TAG, "No se pudo activar NoiseSuppressor.", e);
+                updateNoiseReductionActiveState(false);
+            }
+        }
+    }
+
+    private void releaseNoiseSuppressor() {
+        synchronized (noiseSuppressorLock) {
+            if (noiseSuppressor != null) {
+                noiseSuppressor.release();
+                noiseSuppressor = null;
+            }
+        }
+        updateNoiseReductionActiveState(false);
+    }
+
+    private void updateNoiseReductionActiveState(boolean active) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean(PREF_NOISE_REDUCTION_ACTIVE, active)
+                .apply();
     }
 
     private void setGanancia(float gain) {
