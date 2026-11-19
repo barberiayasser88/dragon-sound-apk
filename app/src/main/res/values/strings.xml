@@ -14,4 +14,7 @@
     <string name="tile_active">Escucha activa</string>
     <string name="tile_inactive">Activar escucha</string>
     <string name="tile_description">Inicia o detiene la escucha de Dragon Sound</string>
+    <string name="updates_channel_id" translatable="false">dragon_sound_updates</string>
+    <string name="updates_channel_name">Actualizaciones</string>
+    <string name="updates_channel_description">Avisos cuando haya una nueva versión de Dragon Sound.</string>
 </resources>
