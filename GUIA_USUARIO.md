@@ -16,11 +16,11 @@ La app mantiene la escucha mediante un servicio en primer plano y conserva el mo
 
 ## Reducción de ruido
 
-El control **Reducción de ruido** activa el efecto NoiseSuppressor de Android cuando está disponible. La captura usa además la fuente de voz de Android, que puede aplicar procesamiento del fabricante. **ACTIVO** confirma el efecto NoiseSuppressor; no garantiza eliminar todo el ruido ni que el procesamiento del teléfono se pueda apagar por completo. Está activado por defecto. Al iniciar, el botón indica si el efecto quedó **ACTIVO**; si Android no lo ofrece o no permite activarlo, mostrará **NO DISPONIBLE**. En ese caso no se simula la reducción: puedes desactivar el control y seguir usando el audio.
+El control **Reducción de ruido** activa el efecto NoiseSuppressor proporcionado por Android cuando el dispositivo lo admite. Está activado por defecto. Al iniciar, el botón indica si el efecto quedó **ACTIVO**; si Android no lo ofrece o no permite activarlo, mostrará **NO DISPONIBLE**. En ese caso no se simula la reducción: puedes desactivar el control y seguir usando el audio.
 
 ## Retardo y auriculares
 
-La reproducción conserva la ruta de baja latencia y el búfer mínimo compatible. La captura usa la fuente de voz de Android; su procesamiento puede añadir cierto retardo. Aun así, Android, el hardware y en particular Bluetooth A2DP pueden añadir retardo. No se puede garantizar retardo cero. Si el sonido retardado de tu propia voz te confunde, detén la escucha mientras hablas o prueba una salida cableada; la percepción final debe comprobarse en el teléfono y los auriculares concretos.
+La app solicita una ruta de reproducción de baja latencia y usa el búfer mínimo compatible con el dispositivo. Aun así, Android, el hardware y en particular Bluetooth A2DP pueden añadir retardo. No se puede garantizar retardo cero. Si el sonido retardado de tu propia voz te confunde, detén la escucha mientras hablas o prueba una salida cableada; la percepción final debe comprobarse en el teléfono y los auriculares concretos.
 
 ## Filtros y ecualización
 
@@ -40,4 +40,4 @@ La reducción de ruido es independiente del filtro Voz. La calidad y el nivel fi
 
 ## Instalación y compilación
 
-GitHub Actions genera APKs separados para armeabi-v7a, arm64-v8a, x86 y x86_64, además de un APK universal. Este Motorola reporta arm64-v8a; el paquete individual es app-arm64-v8a-debug.apk. Para compilar, usa gradlew.bat assembleDebug en Windows o ./gradlew assembleDebug en macOS/Linux.
+El APK universal de GitHub Actions incluye armeabi-v7a, arm64-v8a, x86 y x86_64. Para compilar con Android SDK, NDK 25.1.8937393, CMake 3.22.1 y Java 17, usa gradlew.bat assembleDebug en Windows o ./gradlew assembleDebug en macOS/Linux.
