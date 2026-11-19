@@ -78,7 +78,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Amplificación hasta 130 dB con limitador de seguridad"
+                    android:text="Ajusta el volumen con cuidado; el nivel acústico no está calibrado."
                     android:textSize="10sp"
                     android:textStyle="italic"
                     android:layout_marginTop="8dp" />
@@ -107,6 +107,31 @@
                     android:id="@+id/filterSpinner"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_background"
+                android:padding="12dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="REDUCCIÓN DE RUIDO"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/primary"
+                    android:layout_marginBottom="8dp" />
+
+                <Button
+                    android:id="@+id/noiseReductionButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Reducción de ruido: ACTIVADA al iniciar" />
 
             </LinearLayout>
 
