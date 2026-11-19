@@ -30,6 +30,7 @@
     <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
 
     <application
+        android:name=".DragonSoundApplication"
         android:allowBackup="true"
         android:icon="@drawable/dragon_sound_launcher"
         android:label="@string/app_name"
@@ -45,11 +46,21 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".OpenReleaseActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="com.audifono.propietario.OPEN_RELEASE" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
