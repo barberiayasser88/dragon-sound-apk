@@ -52,7 +52,8 @@ public class MainActivity extends AppCompatActivity {
                 if (AudioService.PREF_ACTIVE.equals(key)
                         || AudioService.PREF_LAST_ERROR.equals(key)
                         || AudioService.PREF_NOISE_REDUCTION.equals(key)
-                        || AudioService.PREF_NOISE_REDUCTION_ACTIVE.equals(key)) {
+                        || AudioService.PREF_NOISE_REDUCTION_ACTIVE.equals(key)
+                        || AudioService.PREF_BLUETOOTH_ROUTE.equals(key)) {
                     updateStatus();
                 }
             };
@@ -383,7 +384,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         boolean active = AudioService.isAudioActive(this);
-        statusTextView.setText(active ? "Estado: ACTIVO" : "Estado: DETENIDO");
+        String status = active ? "Estado: ACTIVO" : "Estado: DETENIDO";
+        if (active) {
+            String route = AudioService.getBluetoothRouteStatus(this);
+            if (AudioService.BLUETOOTH_ROUTE_LOW_LATENCY.equals(route)) {
+                status += " - Bluetooth: modo llamada";
+            } else if (AudioService.BLUETOOTH_ROUTE_STANDARD.equals(route)) {
+                status += " - Bluetooth: modo normal";
+            }
+        }
+        statusTextView.setText(status);
         statusTextView.setTextColor(getResources().getColor(
                 active ? android.R.color.holo_green_dark : android.R.color.holo_red_dark
         ));
