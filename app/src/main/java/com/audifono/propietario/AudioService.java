@@ -1,7 +1,7 @@
 package com.audifono.propietario;
 
 import android.media.AudioAttributes;
-import android.media.AudioEffect;
+import android.media.audiofx.AudioEffect;
 import android.media.audiofx.NoiseSuppressor;
 import android.Manifest;
 import android.app.Notification;
